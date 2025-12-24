@@ -1,84 +1,42 @@
-import { Role, LeaveStatus, User } from "@prisma/client";
+// lib/permissions.ts
+import { LeaveStatus } from "@prisma/client";
 
 /**
- * Helper to check if a user is a manager-type role
+ * Manager approval logic
+ * Manager is derived from User.managerId (NOT leave.managerId)
  */
-export function isManagerialRole(role: Role): boolean {
-  return role === Role.MANAGER || role === Role.PROJECT_DIRECTOR;
-}
+export function canManagerApproveLeave(params: {
+  managerId: string;
+  employeeId: string;
+  employeeManagerId: string | null;
+  leaveStatus: LeaveStatus;
+}): boolean {
+  const {
+    managerId,
+    employeeId,
+    employeeManagerId,
+    leaveStatus,
+  } = params;
 
-/**
- * Can the user approve or reject a leave request?
- */
-export function canApproveLeave(
-  currentUser: Pick<User, "id" | "role">,
-  leave: {
-    userId: string;
-    status: LeaveStatus;
-  },
-  employeeManagerId?: string
-): boolean {
-  // HR, Accounts, Admin, Procurement can NEVER approve
-  if (
-    currentUser.role === Role.HR ||
-    currentUser.role === Role.ACCOUNTS ||
-    currentUser.role === Role.ADMIN ||
-    currentUser.role === Role.PROCUREMENT
-  ) {
+  // 1️⃣ Leave must be pending at manager level
+  if (leaveStatus !== LeaveStatus.PENDING_MANAGER) {
     return false;
   }
 
-  // Project Director can approve any leave
-  if (currentUser.role === Role.PROJECT_DIRECTOR) {
-    return true;
+  // 2️⃣ Employee must have a manager
+  if (!employeeManagerId) {
+    return false;
   }
 
-  // Manager can approve only their direct report
-  if (
-    currentUser.role === Role.MANAGER &&
-    employeeManagerId === currentUser.id
-  ) {
-    return true;
+  // 3️⃣ Logged-in manager must be the employee's manager
+  if (employeeManagerId !== managerId) {
+    return false;
   }
 
-  return false;
-}
+  // 4️⃣ Manager cannot approve their own leave
+  if (employeeId === managerId) {
+    return false;
+  }
 
-/**
- * Can the user view leave balances of others?
- */
-export function canViewLeaveBalances(role: Role): boolean {
-  return (
-    role === Role.MANAGER ||
-    role === Role.PROJECT_DIRECTOR ||
-    role === Role.HR ||
-    role === Role.ACCOUNTS
-  );
-}
-
-/**
- * Can the user view team leave requests?
- */
-export function canViewTeamLeaves(role: Role): boolean {
-  return (
-    role === Role.MANAGER ||
-    role === Role.PROJECT_DIRECTOR ||
-    role === Role.HR ||
-    role === Role.ACCOUNTS
-  );
-}
-
-/**
- * Can the user apply for leave?
- * (Everyone can apply for themselves)
- */
-export function canApplyForLeave(): boolean {
-  return true;
-}
-
-/**
- * Can the user see the organization calendar?
- */
-export function canViewCalendar(): boolean {
   return true;
 }
