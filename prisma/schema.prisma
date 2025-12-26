@@ -9,7 +9,6 @@ datasource db {
 }
 
 model User {
-  // CHANGED: used uuid() to match Supabase Auth standard
   id             String         @id @default(uuid())
   name           String
   email          String         @unique
@@ -56,7 +55,6 @@ model LeaveRequest {
   endDate           DateTime
   isHalfDay         Boolean     @default(false)
   
-  // NEW: Essential for reports so you don't have to recalculate weekends every time
   daysCount         Float       @default(1.0)
   
   reason            String
@@ -83,6 +81,7 @@ model Holiday {
   description String?
 }
 
+// CHANGED: Added LEGAL to the Enum
 enum Role {
   EMPLOYEE
   MANAGER
@@ -91,6 +90,7 @@ enum Role {
   ACCOUNTS
   ADMIN
   PROCUREMENT
+  LEGAL
 }
 
 enum EmploymentType {
@@ -112,5 +112,5 @@ enum LeaveStatus {
   APPROVED
   REJECTED_MANAGER
   REJECTED_DIRECTOR
-  CANCELLED          // NEW: Added for when user cancels their own request
+  CANCELLED
 }
