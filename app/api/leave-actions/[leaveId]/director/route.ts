@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { LeaveStatus } from "@prisma/client";
+import { calculateLeaveDays } from "@/lib/leave-utils";
 
 export async function POST(
   req: NextRequest,
@@ -59,7 +60,31 @@ export async function POST(
   // const daysCount = calculateDays(leave.startDate, leave.endDate);
   // This would usually be a prisma.$transaction([])
 
-  const updatedLeave = await prisma.leaveRequest.update({
+  // const updatedLeave = await prisma.leaveRequest.update({
+  //   where: { id: leaveId },
+  //   data: {
+  //     status:
+  //       action === "APPROVE"
+  //         ? LeaveStatus.APPROVED
+  //         : LeaveStatus.REJECTED_DIRECTOR,
+  //     directorId: session.user.id,
+  //     directorDecisionAt: new Date(),
+  //     rejectionReason:
+  //       action === "REJECT" ? rejectionReason : null,
+  //   },
+  // });
+
+  // return NextResponse.json(updatedLeave);
+
+  const days = calculateLeaveDays(
+  leave.startDate,
+  leave.endDate,
+  leave.isHalfDay
+);
+
+const result = await prisma.$transaction(async (tx) => {
+  // 1️⃣ Update leave status
+  const updatedLeave = await tx.leaveRequest.update({
     where: { id: leaveId },
     data: {
       status:
@@ -73,5 +98,36 @@ export async function POST(
     },
   });
 
-  return NextResponse.json(updatedLeave);
+  // 2️⃣ Deduct leave balance ONLY if approved
+  if (action === "APPROVE") {
+    const balanceUpdate: Record<string, number> = {};
+
+    switch (leave.leaveType) {
+      case "CASUAL":
+        balanceUpdate.casualUsed = days;
+        break;
+      case "EARNED":
+        balanceUpdate.earnedUsed = days;
+        break;
+      case "MEDICAL":
+        balanceUpdate.medicalUsed = days;
+        break;
+      case "UNPAID":
+        balanceUpdate.unpaidUsed = days;
+        break;
+    }
+
+    await tx.leaveBalance.update({
+      where: { userId: leave.userId },
+      data: {
+        ...balanceUpdate,
+      },
+    });
+  }
+
+  return updatedLeave;
+});
+
+return NextResponse.json(result);
+
 }
